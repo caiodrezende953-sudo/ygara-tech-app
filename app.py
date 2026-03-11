@@ -22,15 +22,14 @@ if 'usuario_email' not in st.session_state: st.session_state['usuario_email'] = 
 if 'navegando' not in st.session_state: st.session_state['navegando'] = False
 if 'gps_progresso' not in st.session_state: st.session_state['gps_progresso'] = 0
 
-# Filtros (Pílulas)
 if 'mostrar_restaurantes' not in st.session_state: st.session_state['mostrar_restaurantes'] = True
 if 'mostrar_postos' not in st.session_state: st.session_state['mostrar_postos'] = True
 if 'mostrar_marinas' not in st.session_state: st.session_state['mostrar_marinas'] = True
 
 # ==========================================
-# 1. LAYOUT MOBILE & ESTILO GOOGLE MAPS
+# 1. LAYOUT MOBILE & ESTILO MAPS (CABEÇALHO LIMPO)
 # ==========================================
-st.set_page_config(page_title="Ygara Nav", layout="wide", page_icon="🧭", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="Ygara", layout="wide", page_icon="🧭", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
@@ -48,17 +47,17 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# CABEÇALHO LIMPO
-c_l1, c_l2 = st.columns([1, 8])
-with c_l1:
-    if os.path.exists(logo_file_path): st.image(logo_file_path, width=40)
-with c_l2:
-    st.markdown("<h4 style='margin:0; padding-top:5px; color:#1A73E8; font-weight:700;'>Ygara Nav</h4>", unsafe_allow_html=True)
+# CABEÇALHO COM LOGO CENTRALIZADA E SEM TEXTOS
+c_espaco1, c_logo, c_espaco2 = st.columns([4, 2, 4])
+with c_logo:
+    if os.path.exists(logo_file_path): 
+        st.image(logo_file_path, use_container_width=True)
+    else:
+        st.markdown("<h3 style='text-align: center; color:#1A73E8; margin:0;'>YGARA</h3>", unsafe_allow_html=True)
 
 # ==========================================
 # 2. BANCO DE DADOS DE ALTA PRECISÃO (PINOS NA ÁGUA)
 # ==========================================
-# Latitudes e Longitudes ajustadas para ficarem rigorosamente dentro do rio.
 locais_base = {
     "Praia da Lua": {"lat": -3.0305, "lon": -60.0570, "tipo": "Praia", "desc": "Área de banhistas"},
     "Praia do Tupé": {"lat": -3.0400, "lon": -60.2500, "tipo": "Praia", "desc": "Reserva Sustentável"},
@@ -86,45 +85,27 @@ marinas = {
     "Marina Tauá": {"lat": -3.0400, "lon": -60.0920, "tipo": "Marina", "desc": "Estrutura Premium"}
 }
 
-# --- MOTOR DE GRAFO FLUVIAL (O SEGREDO DO ROTEAMENTO) ---
-# Em vez de ligar pontos aleatoriamente, criamos as "Rodovias" da água.
 calha_rio_negro = [
-    {"lat": -3.1430, "lon": -60.0150}, # Panair
-    {"lat": -3.1300, "lon": -60.0400}, # Meio do rio (São Raimundo)
-    {"lat": -3.1150, "lon": -60.0550}, # Ponte Rio Negro (Eixo)
-    {"lat": -3.0950, "lon": -60.0800}, # Ponta Negra Aproximação
-    {"lat": -3.0850, "lon": -60.0950}, # Ponta Negra Calha
-    {"lat": -3.0500, "lon": -60.0700}, # Rio Negro sentido Lua
-    {"lat": -3.0305, "lon": -60.0570}, # Praia da Lua
-    {"lat": -3.0400, "lon": -60.2500}  # Tupé
+    {"lat": -3.1430, "lon": -60.0150}, {"lat": -3.1300, "lon": -60.0400}, {"lat": -3.1150, "lon": -60.0550}, 
+    {"lat": -3.0950, "lon": -60.0800}, {"lat": -3.0850, "lon": -60.0950}, {"lat": -3.0500, "lon": -60.0700}, 
+    {"lat": -3.0305, "lon": -60.0570}, {"lat": -3.0400, "lon": -60.2500}
 ]
 
 calha_taruma = [
-    {"lat": -3.0850, "lon": -60.0950}, # Conexão com Rio Negro (Ponta Negra)
-    {"lat": -3.0700, "lon": -60.1050}, # Curva Tarumã
-    {"lat": -3.0600, "lon": -60.0950}, # Flutuante da Tia
-    {"lat": -3.0520, "lon": -60.1020}, # Sedutor
-    {"lat": -3.0440, "lon": -60.1105}, # Abaré
-    {"lat": -3.0415, "lon": -60.1085}  # Sun Paradise
+    {"lat": -3.0850, "lon": -60.0950}, {"lat": -3.0700, "lon": -60.1050}, {"lat": -3.0600, "lon": -60.0950}, 
+    {"lat": -3.0520, "lon": -60.1020}, {"lat": -3.0440, "lon": -60.1105}, {"lat": -3.0415, "lon": -60.1085}
 ]
 
 def gerar_rota_inteligente(origem_dict, destino_dict):
-    """Gera micropontos garantindo que o barco siga as calhas fluviais."""
     o_lat, o_lon = origem_dict["lat"], origem_dict["lon"]
     d_lat, d_lon = destino_dict["lat"], destino_dict["lon"]
     
-    # Se ambos são no Tarumã, usa a calha do Tarumã. Senão, usa a calha principal.
-    if o_lon < -60.080 and d_lon < -60.080 and o_lat > -3.085 and d_lat > -3.085:
-        trilho_base = calha_taruma
-    else:
-        trilho_base = calha_rio_negro + calha_taruma # Une as rodovias para navegação longa
+    if o_lon < -60.080 and d_lon < -60.080 and o_lat > -3.085 and d_lat > -3.085: trilho_base = calha_taruma
+    else: trilho_base = calha_rio_negro + calha_taruma
         
-    # Ordena os pontos do trilho para seguir o sentido da viagem
     trilho_base = sorted(trilho_base, key=lambda p: abs(p["lon"] - o_lon))
-    
     pontos_rota = [{"lat": o_lat, "lon": o_lon}]
     
-    # Adiciona os nós do rio que estão entre a origem e o destino
     for p in trilho_base:
         if min(o_lon, d_lon) - 0.01 <= p["lon"] <= max(o_lon, d_lon) + 0.01:
             if min(o_lat, d_lat) - 0.01 <= p["lat"] <= max(o_lat, d_lat) + 0.01:
@@ -132,16 +113,13 @@ def gerar_rota_inteligente(origem_dict, destino_dict):
                 
     pontos_rota.append({"lat": d_lat, "lon": d_lon})
     
-    # INTERPOLAÇÃO (Criação dos Micropontos)
     micropontos = []
     for i in range(len(pontos_rota)-1):
         p1, p2 = pontos_rota[i], pontos_rota[i+1]
-        passos = 10 # 10 micropontos por trecho
-        for step in range(passos):
-            f = step / float(passos)
+        for step in range(10):
+            f = step / 10.0
             micropontos.append({"lat": p1["lat"] + (p2["lat"] - p1["lat"]) * f, "lon": p1["lon"] + (p2["lon"] - p1["lon"]) * f})
     micropontos.append(pontos_rota[-1])
-    
     return pd.DataFrame(micropontos)
 
 todos_locais = {**locais_base, **restaurantes, **postos_combustivel, **marinas}
@@ -159,11 +137,11 @@ df_rota_ativa = gerar_rota_inteligente(todos_locais[st.session_state['rota_orige
 st.markdown("<div class='maps-card'>", unsafe_allow_html=True)
 c_rt1, c_rt2, c_rt3, c_rt4 = st.columns([3, 0.4, 3, 2])
 with c_rt1:
-    st.session_state['rota_origem'] = st.selectbox("Local de Partida", opcoes_locais, index=opcoes_locais.index(st.session_state['rota_origem']), label_visibility="collapsed")
+    st.session_state['rota_origem'] = st.selectbox("Partida", opcoes_locais, index=opcoes_locais.index(st.session_state['rota_origem']), label_visibility="collapsed")
 with c_rt2:
     st.markdown('<div class="swap-btn">', unsafe_allow_html=True); st.button("⇅", on_click=inverter_rota); st.markdown('</div>', unsafe_allow_html=True)
 with c_rt3:
-    st.session_state['rota_destino'] = st.selectbox("Para onde?", opcoes_locais, index=opcoes_locais.index(st.session_state['rota_destino']), label_visibility="collapsed")
+    st.session_state['rota_destino'] = st.selectbox("Destino", opcoes_locais, index=opcoes_locais.index(st.session_state['rota_destino']), label_visibility="collapsed")
 with c_rt4:
     st.markdown('<div class="start-nav-btn">', unsafe_allow_html=True)
     if st.button("▶ NAVEGAR"): st.session_state['navegando'] = True; st.rerun()
@@ -179,13 +157,12 @@ if c_filtro3.button("⚓ Marinas" if not st.session_state['mostrar_marinas'] els
 # ==========================================
 # 4. MAPA COM MICROPONTOS E SATÉLITE GOOGLE
 # ==========================================
-fig = px.line_mapbox(df_rota_ativa, lat="lat", lon="lon", zoom=12.5, height=650)
+fig = px.line_mapbox(df_rota_ativa, lat="lat", lon="lon", zoom=12.5, height=600)
 
-# A MÁGICA DOS MICROPONTOS: Traçado visual estilo Waze
 fig.update_traces(
     mode="lines+markers", 
-    line=dict(width=4, color="rgba(26, 115, 232, 0.6)"), # Linha base semi-transparente
-    marker=dict(size=7, color="#00E5FF", symbol="circle") # Pontos de navegação brilhantes
+    line=dict(width=4, color="rgba(26, 115, 232, 0.6)"),
+    marker=dict(size=7, color="#00E5FF", symbol="circle")
 )
 
 if st.session_state['navegando']:
@@ -194,12 +171,10 @@ if st.session_state['navegando']:
     lat_b = df_rota_ativa.iloc[st.session_state['gps_progresso']]['lat']
     lon_b = df_rota_ativa.iloc[st.session_state['gps_progresso']]['lon']
     
-    # O Barco
     fig.add_trace(go.Scattermapbox(lat=[lat_b], lon=[lon_b], mode='markers+text', marker=go.scattermapbox.Marker(size=22, color="#FF3B30", symbol="circle"), text=["🛥️"], textposition="top center", textfont=dict(size=20), hoverinfo="none"))
     fig.update_layout(mapbox=dict(center=dict(lat=lat_b, lon=lon_b), zoom=15))
     if st.button("⏹ Encerrar Navegação", type="primary"): st.session_state['navegando'] = False; st.session_state['gps_progresso'] = 0; st.rerun()
 
-# PLOTANDO OS POIs (Com cores e ícones distintos)
 if st.session_state['mostrar_restaurantes']:
     for nome, dados in restaurantes.items():
         fig.add_trace(go.Scattermapbox(lat=[dados['lat']], lon=[dados['lon']], mode='markers+text', marker=go.scattermapbox.Marker(size=12, color="#FF9800"), text=["🍴 " + nome], textposition="bottom right", textfont=dict(color="#FF9800", size=13, family="Roboto", weight="bold"), hoverinfo="text", hovertext=f"{nome}<br>{dados['desc']}"))
@@ -212,45 +187,58 @@ if st.session_state['mostrar_marinas']:
     for nome, dados in marinas.items():
         fig.add_trace(go.Scattermapbox(lat=[dados['lat']], lon=[dados['lon']], mode='markers+text', marker=go.scattermapbox.Marker(size=12, color="#3949AB"), text=["⚓ " + nome], textposition="bottom right", textfont=dict(color="#3949AB", size=13, family="Roboto", weight="bold"), hoverinfo="text", hovertext=f"{nome}<br>{dados['desc']}"))
 
-# Plotando as Praias e Pontos Turísticos
 for nome, dados in locais_base.items():
     if nome != "Ponta Negra (Calha)":
         fig.add_trace(go.Scattermapbox(lat=[dados['lat']], lon=[dados['lon']], mode='markers+text', marker=go.scattermapbox.Marker(size=8, color="#757575"), text=[nome], textposition="top right", textfont=dict(color="#444", size=11, family="Roboto"), hoverinfo="text"))
 
-# FORÇANDO O SATÉLITE RÁPIDO DO GOOGLE MAPS
 fig.update_layout(
     mapbox_style="white-bg", 
-    mapbox_layers=[{
-        "below": 'traces', 
-        "sourcetype": "raster", 
-        "sourceattribution": "Google Maps", 
-        "source": ["https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"] # Satélite Oficial Rápido
-    }],
+    mapbox_layers=[{"below": 'traces', "sourcetype": "raster", "sourceattribution": "Google Maps", "source": ["https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"]}],
     margin={"r":0,"t":0,"l":0,"b":0}, showlegend=False
 )
-
 st.plotly_chart(fig, use_container_width=True)
 
 # ==========================================
-# 5. ABAS INFERIORES (REPORTAR E PERFIL)
+# 5. ABAS INFERIORES: REPORTAR, CONTA E EMERGÊNCIA
 # ==========================================
-tab_alertas, tab_perfil = st.tabs(["⚠️ Reportar no Mapa", "👤 Meu Barco"])
+st.markdown("<br>", unsafe_allow_html=True)
+tab_alertas, tab_perfil, tab_emergencia = st.tabs(["⚠️ Reportar Perigo", "👤 Conta", "🆘 Emergência e Créditos"])
 
 with tab_alertas:
-    st.write("Reporte perigos (Troncos, Bancos de areia) para ajudar outros marinheiros.")
     with st.form("form_alerta"):
         c_f1, c_f2 = st.columns([1, 2])
         tipo_alerta = c_f1.selectbox("O que é?", ["🪵 Tronco", "🏝️ Areia", "🎣 Rede", "🚓 Fiscalização", "⚠️ Enguiço"])
         local_alerta = c_f2.selectbox("Próximo de onde?", opcoes_locais)
         if st.form_submit_button("Lançar Alerta Público", type="primary"):
-            st.success(f"Alerta de {tipo_alerta} registrado próximo a {local_alerta}!")
+            st.success(f"Alerta registrado próximo a {local_alerta}!")
 
 with tab_perfil:
-    st.info("No app final, estas opções ajustarão os cálculos de rota para evitar encalhes com base na altura do seu casco.")
     with st.form("form_perfil"):
         c_p1, c_p2 = st.columns(2)
         nome_edit = c_p1.text_input("Seu Nome")
         tipo_barco_edit = c_p2.selectbox("Embarcação", ["🛶 Canoa", "🚤 Jet Ski", "🛥️ Lancha Pequena", "🛳️ Iate", "⛴️ Barco Regional"], index=2)
         if st.form_submit_button("Salvar Perfil", type="primary"):
-            st.success("Dados salvos no dispositivo.")
-            
+            st.success("Dados salvos com sucesso.")
+
+with tab_emergencia:
+    st.markdown("### 📞 Telefones de Emergência")
+    st.error("**Em caso de perigo iminente na água, acione imediatamente o socorro oficial:**")
+    
+    st.markdown("""
+    * 🚓 **Polícia Militar:** 190
+    * 🚑 **SAMU (Urgência Médica):** 192
+    * 🚒 **Corpo de Bombeiros:** 193
+    * ⚓ **Capitania Fluvial da Amazônia Ocidental (Marinha):** 185 ou (92) 2123-2222
+    """)
+    
+    st.markdown("---")
+    st.markdown("### ℹ️ Sobre")
+    st.info("""
+    **Ygara - O Waze dos Rios**
+    Versão: 1.0 (Produção)
+    
+    Desenvolvido para revolucionar a segurança e a logística na Bacia Amazônica através de mapeamento colaborativo e geolocalização fluvial.
+    
+    *Desenvolvido por Caio Rezende.*
+    """)
+    
